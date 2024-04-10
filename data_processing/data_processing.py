@@ -2,11 +2,12 @@ import plotly.graph_objects as go
 import networkx as nx
 
 
-def user_graph(data, day_index):
+def user_graph(data, day_index, nodes_and_edges_cache=None):
     """This is a demo layout. Actual data is not currently loaded."""
-    edges = [["Joyce Ooi", 'Hsin-Yi Wang'], ['Ignat Korchagin', 'Mikulas Patocka'], ['kernel test robot', 'Tetsuo Handa']]
+    nodes_and_edges = get_nodes_and_edges(data) if nodes_and_edges_cache is None else nodes_and_edges_cache
     G = nx.Graph()
-    G.add_edges_from(edges)
+    G.add_edges_from(nodes_and_edges[int(day_index)][1])
+    G.add_nodes_from(nodes_and_edges[int(day_index)][0])
     pos = nx.spring_layout(G)
 
     # edges trace
@@ -46,7 +47,7 @@ def user_graph(data, day_index):
         hoverinfo='none',
         marker=dict(
             color='pink',
-            size=50,
+            size=5,
             line=dict(color='black', width=1)))
 
     # layout
@@ -66,4 +67,39 @@ def user_graph(data, day_index):
     fig = go.Figure(data=[edge_trace, node_trace], layout=layout)
 
     return fig
+
+
+def get_nodes_and_edges(data, verbose=False):
+    """
+    For each day returns a set of users that interacted as nodes and a all interactions as edges.
+    :param data: data in DASH simulation format
+    :param verbose:
+    :return: dictionary: each day is a keys and value is (nodes, edges) tuple.
+    """
+    data = data.assign(day=lambda x: x['nodeTime'] // (24 * 3600))
+
+    day_index_min = data['day'].min()
+    day_index_max = data['day'].max()
+
+    nodes_and_edges = dict()
+
+    if verbose:
+        print(f"days: {len(sorted(list(data['day'].unique())))}, min: {day_index_min}, max: {day_index_max}")
+    for day_index in range((day_index_max - day_index_min) + 1):
+        day_data = data[data['day'] == day_index_min + day_index]
+        if verbose:
+            print(f"day {day_index}: {len(day_data)}")
+        edges = set()
+        nodes = set()
+        for index, event in day_data.iterrows():
+            node_user = event['rootUserID']
+            node_parent = event['parentUserID']
+            nodes.add(node_user)
+            nodes.add(node_parent)
+            if node_user != node_parent:
+                edges.add((node_user, node_parent))
+        nodes_and_edges[day_index] = (nodes, edges)
+
+    return nodes_and_edges
+
 
